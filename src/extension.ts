@@ -1,26 +1,47 @@
-// The module 'vscode' contains the VS Code extensibility API
-// Import the module and reference it with the alias vscode in your code below
 import * as vscode from 'vscode';
+import { scanProject } from './scanner/projectScanner';
 
-// This method is called when your extension is activated
-// Your extension is activated the very first time the command is executed
 export function activate(context: vscode.ExtensionContext) {
 
-	// Use the console to output diagnostic information (console.log) and errors (console.error)
-	// This line of code will only be executed once when your extension is activated
-	console.log('Congratulations, your extension "project-guardian" is now active!');
+	console.log('Project Guardian is now active.');
 
-	// The command has been defined in the package.json file
-	// Now provide the implementation of the command with registerCommand
-	// The commandId parameter must match the command field in package.json
-	const disposable = vscode.commands.registerCommand('project-guardian.helloWorld', () => {
-		// The code you place here will be executed every time your command is executed
-		// Display a message box to the user
-		vscode.window.showInformationMessage('Hello World from Project Guardian!');
-	});
+	const analyzeProject = vscode.commands.registerCommand(
+		'project-guardian.analyzeProject',
+		() => {
 
-	context.subscriptions.push(disposable);
+			const workspaceFolders = vscode.workspace.workspaceFolders;
+
+			if (!workspaceFolders || workspaceFolders.length === 0) {
+				vscode.window.showWarningMessage(
+					'Project Guardian: Please open a project folder first.'
+				);
+				return;
+			}
+
+			const workspacePath = workspaceFolders[0].uri.fsPath;
+
+			try {
+
+				const analysis = scanProject(workspacePath);
+
+				vscode.window.showInformationMessage(
+					`Project Guardian: Found ${analysis.files.length} files and ${analysis.folders.length} folders.`
+				);
+
+				console.log('Project Analysis:', analysis);
+
+			} catch (error) {
+
+				vscode.window.showErrorMessage(
+					'Project Guardian could not analyze the project.'
+				);
+
+				console.error(error);
+			}
+		}
+	);
+
+	context.subscriptions.push(analyzeProject);
 }
 
-// This method is called when your extension is deactivated
 export function deactivate() {}

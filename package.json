@@ -9,16 +9,16 @@
   "categories": [
     "Other"
   ],
-  "activationEvents": [],
-  "main": "./out/extension.js",
-  "contributes": {
+ "activationEvents": [],
+"main": "./out/extension.js",
+"contributes": {
     "commands": [
-      {
-        "command": "project-guardian.helloWorld",
-        "title": "Hello World"
-      }
+        {
+            "command": "project-guardian.analyzeProject",
+            "title": "Project Guardian: Analyze Project"
+        }
     ]
-  },
+},
   "scripts": {
     "vscode:prepublish": "npm run compile",
     "compile": "tsc -p ./",

@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import { scanProject } from './scanner/projectScanner';
+import { checkRootFileOverload } from './scanner/rules';
 
 export function activate(context: vscode.ExtensionContext) {
 
@@ -24,11 +25,29 @@ export function activate(context: vscode.ExtensionContext) {
 
 				const analysis = scanProject(workspacePath);
 
-				vscode.window.showInformationMessage(
-					`Project Guardian: Found ${analysis.files.length} files and ${analysis.folders.length} folders.`
-				);
+				const issues = [];
+
+				const rootFileIssue = checkRootFileOverload(analysis);
+
+				if (rootFileIssue) {
+					issues.push(rootFileIssue);
+				}
 
 				console.log('Project Analysis:', analysis);
+				console.log('Architecture Issues:', issues);
+
+				if (issues.length === 0) {
+
+					vscode.window.showInformationMessage(
+						`Project Guardian: No architecture issues found. ${analysis.files.length} files and ${analysis.folders.length} folders analyzed.`
+					);
+
+				} else {
+
+					vscode.window.showWarningMessage(
+						`Project Guardian: Found ${issues.length} architecture issue(s).`
+					);
+				}
 
 			} catch (error) {
 

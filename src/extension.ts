@@ -2,7 +2,8 @@ import * as vscode from 'vscode';
 import { scanProject } from './scanner/projectScanner';
 import {
 	checkRootFileOverload,
-	checkCatchAllFolders
+	checkCatchAllFolders,
+	checkDeepFolderNesting
 } from './scanner/rules';
 
 export function activate(context: vscode.ExtensionContext) {
@@ -38,6 +39,9 @@ export function activate(context: vscode.ExtensionContext) {
 				const catchAllFolderIssues = checkCatchAllFolders(analysis);
 
 				issues.push(...catchAllFolderIssues);
+				const deepFolderNestingIssues = checkDeepFolderNesting(analysis);
+
+				issues.push(...deepFolderNestingIssues);
 
 				console.log('Project Analysis:', analysis);
 				console.log('Architecture Issues:', issues);

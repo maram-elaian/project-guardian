@@ -95,3 +95,54 @@ export function checkCatchAllFolders(
 
 	return issues;
 }
+export function checkDeepFolderNesting(
+	analysis: ProjectAnalysis
+): ArchitectureIssue[] {
+
+	const issues: ArchitectureIssue[] = [];
+
+	for (const folder of analysis.folders) {
+
+		const relativePath = path.relative(
+			analysis.rootPath,
+			folder.path
+		);
+
+		if (!relativePath) {
+			continue;
+		}
+
+		const depth = relativePath
+			.split(path.sep)
+			.filter(Boolean)
+			.length;
+
+		if (depth <= 4) {
+			continue;
+		}
+
+		const folderFiles = analysis.files.filter(
+			file => path.dirname(file.path) === folder.path
+		);
+
+		if (depth <= 6) {
+			issues.push({
+				ruleId: 'deep-folder-nesting',
+				severity: 'warning',
+				title: 'Deep folder nesting',
+				message: `The folder "${relativePath}" is nested ${depth} levels deep. This may make the project harder to navigate.`,
+				affectedFiles: folderFiles.map(file => file.path)
+			});
+		} else {
+			issues.push({
+				ruleId: 'deep-folder-nesting',
+				severity: 'high',
+				title: 'Excessive folder nesting',
+				message: `The folder "${relativePath}" is nested ${depth} levels deep. Consider simplifying the project structure.`,
+				affectedFiles: folderFiles.map(file => file.path)
+			});
+		}
+	}
+
+	return issues;
+}

@@ -1,6 +1,9 @@
 import * as vscode from 'vscode';
 import { scanProject } from './scanner/projectScanner';
-import { checkRootFileOverload } from './scanner/rules';
+import {
+	checkRootFileOverload,
+	checkCatchAllFolders
+} from './scanner/rules';
 
 export function activate(context: vscode.ExtensionContext) {
 
@@ -32,6 +35,9 @@ export function activate(context: vscode.ExtensionContext) {
 				if (rootFileIssue) {
 					issues.push(rootFileIssue);
 				}
+				const catchAllFolderIssues = checkCatchAllFolders(analysis);
+
+				issues.push(...catchAllFolderIssues);
 
 				console.log('Project Analysis:', analysis);
 				console.log('Architecture Issues:', issues);

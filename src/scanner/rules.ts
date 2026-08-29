@@ -41,3 +41,57 @@ export function checkRootFileOverload(
 		affectedFiles: rootFiles.map(file => file.path)
 	};
 }
+
+export function checkCatchAllFolders(
+	analysis: ProjectAnalysis
+): ArchitectureIssue[] {
+
+	const catchAllNames = new Set([
+		'utils',
+		'helpers',
+		'common',
+		'misc',
+		'shared'
+	]);
+
+	const issues: ArchitectureIssue[] = [];
+
+	for (const folder of analysis.folders) {
+
+		const folderName = path.basename(folder.path).toLowerCase();
+
+		if (!catchAllNames.has(folderName)) {
+			continue;
+		}
+
+		const filesInFolder = analysis.files.filter(
+			file => path.dirname(file.path) === folder.path
+		);
+
+		const fileCount = filesInFolder.length;
+
+		if (fileCount <= 5) {
+			continue;
+		}
+
+		if (fileCount <= 10) {
+			issues.push({
+				ruleId: 'catch-all-folder',
+				severity: 'warning',
+				title: 'Possible catch-all folder',
+				message: `The "${folderName}" folder contains ${fileCount} files. Consider grouping files by their actual responsibility.`,
+				affectedFiles: filesInFolder.map(file => file.path)
+			});
+		} else {
+			issues.push({
+				ruleId: 'catch-all-folder',
+				severity: 'high',
+				title: 'Catch-all folder detected',
+				message: `The "${folderName}" folder contains ${fileCount} files. It may be acting as a catch-all folder and could become difficult to maintain.`,
+				affectedFiles: filesInFolder.map(file => file.path)
+			});
+		}
+	}
+
+	return issues;
+}

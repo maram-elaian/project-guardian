@@ -1,85 +1,129 @@
 import * as vscode from 'vscode';
 
-import {
-	analyzeProject
-} from './analyzer/projectAnalyzer';
+import { analyzeProject } from './analyzer/projectAnalyzer';
 
-export function activate(
-	context: vscode.ExtensionContext
-) {
+import { calculateProjectMetrics } from './metrics/projectMetrics';
 
-	console.log(
-		'Project Guardian is now active.'
-	);
+import { calculateHealthScore } from './metrics/healthScore';
 
-	const analyzeProjectCommand =
-		vscode.commands.registerCommand(
-			'project-guardian.analyzeProject',
-			() => {
+export function activate(context: vscode.ExtensionContext) {
+    console.log('Project Guardian is now active.');
 
-				const workspaceFolders =
-					vscode.workspace.workspaceFolders;
+    const analyzeProjectCommand =
+        vscode.commands.registerCommand(
+            'project-guardian.analyzeProject',
+            () => {
 
-				if (
-					!workspaceFolders ||
-					workspaceFolders.length === 0
-				) {
+                const workspaceFolders =
+                    vscode.workspace.workspaceFolders;
 
-					vscode.window.showWarningMessage(
-						'Project Guardian: Please open a project folder first.'
-					);
+                if (
+                    !workspaceFolders ||
+                    workspaceFolders.length === 0
+                ) {
+                    vscode.window.showWarningMessage(
+                        'Project Guardian: Please open a project folder first.'
+                    );
 
-					return;
-				}
+                    return;
+                }
 
-				const workspacePath =
-					workspaceFolders[0].uri.fsPath;
+                const workspacePath =
+                    workspaceFolders[0].uri.fsPath;
 
-				try {
+                try {
 
-					const result =
-						analyzeProject(workspacePath);
+                    // ==========================================
+                    // PROJECT ANALYSIS
+                    // ==========================================
 
-					console.log(
-						'Project Analysis:',
-						result.analysis
-					);
+                    const result =
+                        analyzeProject(workspacePath);
 
-					console.log(
-						'Architecture Issues:',
-						result.issues
-					);
+                    const analysis =
+                        result.analysis;
 
-					if (result.issues.length === 0) {
+                    const issues =
+                        result.issues;
 
-						vscode.window.showInformationMessage(
-							`Project Guardian: No architecture issues found. ${result.analysis.files.length} files and ${result.analysis.folders.length} folders analyzed.`
-						);
+                    // ==========================================
+                    // PROJECT METRICS
+                    // ==========================================
 
-					} else {
+                    const metrics =
+                        calculateProjectMetrics(
+                            analysis,
+                            issues
+                        );
 
-						vscode.window.showWarningMessage(
-							`Project Guardian: Found ${result.issues.length} architecture issue(s).`
-						);
+                    // ==========================================
+                    // HEALTH SCORE
+                    // ==========================================
 
-					}
+                    const health =
+                        calculateHealthScore(
+                            metrics,
+                            issues
+                        );
 
-				} catch (error) {
+                    // ==========================================
+                    // DEBUG OUTPUT
+                    // ==========================================
 
-					vscode.window.showErrorMessage(
-						'Project Guardian could not analyze the project.'
-					);
+                    console.log(
+                        'Project Analysis:',
+                        analysis
+                    );
 
-					console.error(error);
+                    console.log(
+                        'Architecture Issues:',
+                        issues
+                    );
 
-				}
+                    console.log(
+                        'Project Metrics:',
+                        metrics
+                    );
 
-			}
-		);
+                    console.log(
+                        'Health Score:',
+                        health
+                    );
 
-	context.subscriptions.push(
-		analyzeProjectCommand
-	);
+                    // ==========================================
+                    // USER MESSAGE
+                    // ==========================================
+
+                    if (issues.length === 0) {
+
+                        vscode.window.showInformationMessage(
+                            `Project Guardian: ${health.label} — ${health.score}/100`
+                        );
+
+                    } else {
+
+                        vscode.window.showWarningMessage(
+                            `Project Guardian: ${issues.length} architecture issue(s) — Health Score: ${health.score}/100`
+                        );
+                    }
+
+                } catch (error) {
+
+                    vscode.window.showErrorMessage(
+                        'Project Guardian could not analyze the project.'
+                    );
+
+                    console.error(
+                        'Project Guardian Error:',
+                        error
+                    );
+                }
+            }
+        );
+
+    context.subscriptions.push(
+        analyzeProjectCommand
+    );
 }
 
 export function deactivate() {}

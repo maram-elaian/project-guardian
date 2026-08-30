@@ -10,6 +10,8 @@ export interface ProjectFile {
 
 	imports: string[];
 
+	responsibilities: string[];
+
 }
 
 export interface ProjectFolder {

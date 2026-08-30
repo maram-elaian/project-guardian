@@ -4,7 +4,8 @@ import {
 	checkRootFileOverload,
 	checkCatchAllFolders,
 	checkDeepFolderNesting,
-	checkCircularDependencies
+	checkCircularDependencies,
+	checkMixedResponsibilities
 } from './scanner/rules';
 export function activate(context: vscode.ExtensionContext) {
 
@@ -44,6 +45,10 @@ export function activate(context: vscode.ExtensionContext) {
 				issues.push(...deepFolderNestingIssues);
 				const circularDependencyIssues = checkCircularDependencies(analysis);
 				issues.push(...circularDependencyIssues);
+				const mixedResponsibilityIssues =
+					checkMixedResponsibilities(analysis);
+
+				issues.push(...mixedResponsibilityIssues);
 
 				console.log('Project Analysis:', analysis);
 				console.log('Architecture Issues:', issues);

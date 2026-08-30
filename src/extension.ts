@@ -3,9 +3,9 @@ import { scanProject } from './scanner/projectScanner';
 import {
 	checkRootFileOverload,
 	checkCatchAllFolders,
-	checkDeepFolderNesting
+	checkDeepFolderNesting,
+	checkCircularDependencies
 } from './scanner/rules';
-
 export function activate(context: vscode.ExtensionContext) {
 
 	console.log('Project Guardian is now active.');
@@ -42,6 +42,8 @@ export function activate(context: vscode.ExtensionContext) {
 				const deepFolderNestingIssues = checkDeepFolderNesting(analysis);
 
 				issues.push(...deepFolderNestingIssues);
+				const circularDependencyIssues = checkCircularDependencies(analysis);
+				issues.push(...circularDependencyIssues);
 
 				console.log('Project Analysis:', analysis);
 				console.log('Architecture Issues:', issues);
@@ -73,4 +75,4 @@ export function activate(context: vscode.ExtensionContext) {
 	context.subscriptions.push(analyzeProject);
 }
 
-export function deactivate() {}
+export function deactivate() { }

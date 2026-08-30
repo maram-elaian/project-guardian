@@ -1,5 +1,6 @@
 import * as fs from 'fs';
 import * as path from 'path';
+
 import {
 	ProjectAnalysis,
 	ProjectFile,
@@ -14,6 +15,36 @@ const IGNORED_DIRECTORIES = new Set([
 	'.vscode-test'
 ]);
 
+const SUPPORTED_EXTENSIONS = new Set([
+	'.ts',
+	'.tsx',
+	'.js',
+	'.jsx'
+]);
+
+function extractImports(content: string): string[] {
+
+	const imports: string[] = [];
+
+	const importRegex =
+		/import\s+(?:[\s\S]*?\s+from\s+)?['"]([^'"]+)['"]/g;
+
+	const requireRegex =
+		/require\s*\(\s*['"]([^'"]+)['"]\s*\)/g;
+
+	let match: RegExpExecArray | null;
+
+	while ((match = importRegex.exec(content)) !== null) {
+		imports.push(match[1]);
+	}
+
+	while ((match = requireRegex.exec(content)) !== null) {
+		imports.push(match[1]);
+	}
+
+	return [...new Set(imports)];
+}
+
 export function scanProject(rootPath: string): ProjectAnalysis {
 
 	const files: ProjectFile[] = [];
@@ -27,7 +58,10 @@ export function scanProject(rootPath: string): ProjectAnalysis {
 
 		for (const entry of entries) {
 
-			const fullPath = path.join(directoryPath, entry.name);
+			const fullPath = path.join(
+				directoryPath,
+				entry.name
+			);
 
 			if (entry.isDirectory()) {
 
@@ -47,11 +81,35 @@ export function scanProject(rootPath: string): ProjectAnalysis {
 				const stats = fs.statSync(fullPath);
 				const extension = path.extname(entry.name);
 
+				let imports: string[] = [];
+
+				if (SUPPORTED_EXTENSIONS.has(extension)) {
+
+					try {
+
+						const content = fs.readFileSync(
+							fullPath,
+							'utf-8'
+						);
+
+						imports = extractImports(content);
+
+					} catch (error) {
+
+						console.error(
+							`Could not read file: ${fullPath}`,
+							error
+						);
+
+					}
+				}
+
 				files.push({
 					name: entry.name,
 					path: fullPath,
 					extension: extension || '(none)',
-					size: stats.size
+					size: stats.size,
+					imports
 				});
 			}
 		}

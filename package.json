@@ -3,42 +3,56 @@
   "displayName": "Project Guardian",
   "description": "Intelligent architecture protection and project organization for VS Code.",
   "version": "0.0.1",
+  "publisher": "maram-elaian",
+  "icon": "media/icon.png",
   "engines": {
-    "vscode": "^1.134.0"
+    "vscode": "^1.85.0"
   },
   "categories": [
-    "Other"
+    "Other",
+    "Visualization"
   ],
- "activationEvents": [],
-"main": "./out/extension.js",
-"contributes": {
+  "activationEvents": [
+    "onCommand:project-guardian.analyzeProject",
+    "onView:projectGuardian.sidebar"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
     "commands": [
+      {
+        "command": "project-guardian.analyzeProject",
+        "title": "Project Guardian: Analyze Project"
+      }
+    ],
+    "viewsContainers": {
+      "activitybar": [
         {
-            "command": "project-guardian.analyzeProject",
-            "title": "Project Guardian: Analyze Project"
+          "id": "projectGuardian",
+          "title": "Project Guardian",
+          "icon": "media/icon.svg"
         }
-    ]
-},
+      ]
+    },
+    "views": {
+      "projectGuardian": [
+        {
+          "type": "webview",
+          "id": "projectGuardian.sidebar",
+          "name": "Guardian Dashboard"
+        }
+      ]
+    }
+  },
   "scripts": {
     "vscode:prepublish": "npm run compile",
     "compile": "tsc -p ./",
-    "watch": "tsc -watch -p ./",
-    "pretest": "npm run compile && npm run lint",
-    "lint": "eslint src",
-    "test": "vscode-test"
+    "watch": "tsc -watch -p ./"
   },
   "devDependencies": {
-    "@types/vscode": "^1.134.0",
-    "@types/mocha": "^10.0.10",
-    "@types/node": "24.x",
-    "typescript-eslint": "^8.61.1",
-    "eslint": "^10.5.0",
-    "typescript": "^6.0.3",
-    "@vscode/test-cli": "^0.0.15",
-    "@vscode/test-electron": "^3.0.0"
+    "@types/vscode": "^1.85.0",
+    "@types/node": "^20.0.0",
+    "typescript": "^5.3.0",
+    "@vscode/test-electron": "^2.3.8"
   },
-  "overrides": {
-    "diff": "^8.0.4",
-    "serialize-javascript": "^7.0.6"
-  }
+  "dependencies": {}
 }

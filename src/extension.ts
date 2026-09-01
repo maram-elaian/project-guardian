@@ -4,690 +4,1391 @@ import { analyzeProject } from './analyzer/projectAnalyzer';
 import { calculateProjectMetrics } from './metrics/projectMetrics';
 import { calculateHealthScore } from './metrics/healthScore';
 
+
+// ============================================================
+// GLOBAL STATE
+// ============================================================
+
+let lastAnalysis: any = null;
+let lastMetrics: any = null;
+let lastHealth: any = null;
+
+let sidebarProvider: GuardianSidebarProvider;
+
+
+// ============================================================
+// EXTENSION ACTIVATION
+// ============================================================
+
 export function activate(context: vscode.ExtensionContext) {
+
     console.log('Project Guardian is now active.');
 
-    const analyzeProjectCommand =
-        vscode.commands.registerCommand(
-            'project-guardian.analyzeProject',
-            () => {
+    // --------------------------------------------------------
+    // SIDEBAR PROVIDER
+    // --------------------------------------------------------
 
-                const workspaceFolders =
-                    vscode.workspace.workspaceFolders;
+    sidebarProvider = new GuardianSidebarProvider();
 
-                if (
-                    !workspaceFolders ||
-                    workspaceFolders.length === 0
-                ) {
-                    vscode.window.showWarningMessage(
-                        'Project Guardian: Please open a project folder first.'
-                    );
-                    return;
-                }
+    context.subscriptions.push(
+        vscode.window.registerWebviewViewProvider(
+            'projectGuardian.sidebar',
+            sidebarProvider
+        )
+    );
 
-                const workspacePath =
-                    workspaceFolders[0].uri.fsPath;
 
-                try {
+    // --------------------------------------------------------
+    // ANALYZE PROJECT COMMAND
+    // --------------------------------------------------------
 
-                    const result =
-                        analyzeProject(workspacePath);
+    const analyzeCommand = vscode.commands.registerCommand(
+        'project-guardian.analyzeProject',
+        async () => {
 
-                    const analysis =
-                        result.analysis;
+            const workspaceFolder =
+                vscode.workspace.workspaceFolders?.[0];
 
-                    const issues =
-                        result.issues;
+            if (!workspaceFolder) {
 
-                    const metrics =
-                        calculateProjectMetrics(
-                            analysis,
-                            issues
-                        );
+                vscode.window.showWarningMessage(
+                    'Project Guardian: Please open a project folder first.'
+                );
 
-                    const health =
-                        calculateHealthScore(
-                            metrics,
-                            issues
-                        );
-
-                    console.log('Project Analysis:', analysis);
-                    console.log('Architecture Issues:', issues);
-                    console.log('Project Metrics:', metrics);
-                    console.log('Health Score:', health);
-
-                    const panel =
-                        vscode.window.createWebviewPanel(
-                            'projectGuardianDashboard',
-                            'Project Guardian',
-                            vscode.ViewColumn.One,
-                            {
-                                enableScripts: true
-                            }
-                        );
-
-                    panel.webview.onDidReceiveMessage(
-                        async (message) => {
-
-                            if (message.command === 'openFile') {
-
-                                try {
-
-                                    const filePath =
-                                        message.filePath;
-
-                                    const document =
-                                        await vscode.workspace.openTextDocument(
-                                            filePath
-                                        );
-
-                                    await vscode.window.showTextDocument(
-                                        document,
-                                        {
-                                            preview: false
-                                        }
-                                    );
-
-                                } catch (error) {
-
-                                    vscode.window.showErrorMessage(
-                                        'Project Guardian could not open the selected file.'
-                                    );
-
-                                    console.error('Open File Error:', error);
-                                }
-                            }
-                        },
-                        undefined,
-                        context.subscriptions
-                    );
-
-                    panel.webview.html =
-                        getDashboardHtml(
-                            analysis,
-                            issues,
-                            metrics,
-                            health
-                        );
-
-                } catch (error) {
-
-                    vscode.window.showErrorMessage(
-                        'Project Guardian could not analyze the project.'
-                    );
-
-                    console.error('Project Guardian Error:', error);
-                }
+                return;
             }
-        );
 
-    context.subscriptions.push(analyzeProjectCommand);
+            try {
+
+                const rootPath = workspaceFolder.uri.fsPath;
+
+                // ------------------------------------------------
+                // ANALYZE
+                // ------------------------------------------------
+
+                const result = await analyzeProject(rootPath);
+
+                lastAnalysis = result.analysis;
+
+                // ------------------------------------------------
+                // METRICS
+                // ------------------------------------------------
+
+                lastMetrics = calculateProjectMetrics(
+                    result.analysis,
+                    result.issues
+                );
+
+                // ------------------------------------------------
+                // HEALTH SCORE
+                // ------------------------------------------------
+
+                lastHealth = calculateHealthScore(
+                    lastMetrics,
+                    result.issues
+                );
+
+
+                console.log(
+                    'Project Analysis:',
+                    result.analysis
+                );
+
+                console.log(
+                    'Architecture Issues:',
+                    result.issues
+                );
+
+                console.log(
+                    'Project Metrics:',
+                    lastMetrics
+                );
+
+                console.log(
+                    'Health Score:',
+                    lastHealth
+                );
+
+
+                // ------------------------------------------------
+                // UPDATE SIDEBAR
+                // ------------------------------------------------
+
+                sidebarProvider.update();
+
+
+                // ------------------------------------------------
+                // OPEN FULL DASHBOARD
+                // ------------------------------------------------
+
+                showDashboard(
+                    context,
+                    rootPath,
+                    result.analysis,
+                    result.issues,
+                    lastMetrics,
+                    lastHealth
+                );
+
+            } catch (error) {
+
+                console.error(
+                    'Project Guardian Error:',
+                    error
+                );
+
+                vscode.window.showErrorMessage(
+                    'Project Guardian failed to analyze the project.'
+                );
+            }
+        }
+    );
+
+
+    context.subscriptions.push(analyzeCommand);
 }
 
 
 // ============================================================
-// DASHBOARD HTML
+// DEACTIVATE
 // ============================================================
 
-const SEVERITY_META: Record<string, { label: string; order: number }> = {
-    high: { label: 'High priority', order: 0 },
-    warning: { label: 'Needs attention', order: 1 },
-    info: { label: 'Informational', order: 2 }
-};
+export function deactivate() {
+    console.log('Project Guardian has been deactivated.');
+}
+
+
+// ============================================================
+// SIDEBAR PROVIDER
+// ============================================================
+
+class GuardianSidebarProvider
+    implements vscode.WebviewViewProvider {
+
+    private view?: vscode.WebviewView;
+
+    public resolveWebviewView(
+        webviewView: vscode.WebviewView
+    ): void {
+
+        this.view = webviewView;
+
+        webviewView.webview.options = {
+            enableScripts: true
+        };
+
+        webviewView.webview.html =
+            this.getHtml(webviewView.webview);
+
+
+        // ----------------------------------------------------
+        // RECEIVE MESSAGES FROM SIDEBAR
+        // ----------------------------------------------------
+
+        webviewView.webview.onDidReceiveMessage(
+            async message => {
+
+                switch (message.command) {
+
+                    case 'analyze':
+
+                        await vscode.commands.executeCommand(
+                            'project-guardian.analyzeProject'
+                        );
+
+                        break;
+
+
+                    case 'openFile':
+
+                        if (message.filePath) {
+
+                            try {
+
+                                const document =
+                                    await vscode.workspace.openTextDocument(
+                                        vscode.Uri.file(
+                                            message.filePath
+                                        )
+                                    );
+
+                                await vscode.window.showTextDocument(
+                                    document
+                                );
+
+                            } catch (error) {
+
+                                vscode.window.showErrorMessage(
+                                    'Unable to open file.'
+                                );
+                            }
+                        }
+
+                        break;
+                }
+            }
+        );
+    }
+
+
+    // --------------------------------------------------------
+    // UPDATE SIDEBAR
+    // --------------------------------------------------------
+
+    public update() {
+
+        if (!this.view) {
+            return;
+        }
+
+        this.view.webview.html =
+            this.getHtml(this.view.webview);
+    }
+
+
+    // --------------------------------------------------------
+    // SIDEBAR HTML
+    // --------------------------------------------------------
+
+    private getHtml(
+        webview: vscode.Webview
+    ): string {
+
+        const metrics = lastMetrics;
+        const health = lastHealth;
+
+
+        // ----------------------------------------------------
+        // NO ANALYSIS YET
+        // ----------------------------------------------------
+
+        if (!metrics || !health) {
+
+            return `
+                <!DOCTYPE html>
+
+                <html>
+
+                <head>
+
+                    <meta
+                        charset="UTF-8"
+                    >
+
+                    <meta
+                        name="viewport"
+                        content="width=device-width, initial-scale=1.0"
+                    >
+
+                    <style>
+
+                        * {
+                            box-sizing: border-box;
+                        }
+
+                        body {
+                            margin: 0;
+                            padding: 18px;
+                            background: #111111;
+                            color: #eeeeee;
+                            font-family:
+                                -apple-system,
+                                BlinkMacSystemFont,
+                                "Segoe UI",
+                                sans-serif;
+                        }
+
+                        .header {
+                            display: flex;
+                            align-items: center;
+                            gap: 10px;
+                            margin-bottom: 24px;
+                        }
+
+                        .logo {
+                            width: 34px;
+                            height: 34px;
+                            border-radius: 9px;
+                            object-fit: cover;
+                        }
+
+                        .title {
+                            font-size: 16px;
+                            font-weight: 700;
+                        }
+
+                        .subtitle {
+                            color: #888888;
+                            font-size: 11px;
+                            margin-top: 2px;
+                        }
+
+                        .welcome {
+                            border: 1px solid #292929;
+                            background: #181818;
+                            border-radius: 12px;
+                            padding: 18px;
+                            margin-bottom: 16px;
+                        }
+
+                        .welcome h2 {
+                            margin: 0 0 8px 0;
+                            font-size: 16px;
+                        }
+
+                        .welcome p {
+                            color: #999999;
+                            line-height: 1.5;
+                            font-size: 12px;
+                            margin: 0;
+                        }
+
+                        button {
+                            width: 100%;
+                            margin-top: 16px;
+                            border: none;
+                            border-radius: 8px;
+                            padding: 10px;
+                            background: #20c997;
+                            color: #07110e;
+                            font-weight: 700;
+                            cursor: pointer;
+                        }
+
+                        button:hover {
+                            opacity: 0.9;
+                        }
+
+                    </style>
+
+                </head>
+
+                <body>
+
+                    <div class="header">
+
+                        <img
+                            class="logo"
+                            src="${webview.asWebviewUri(
+                                vscode.Uri.joinPath(
+                                    vscode.Uri.file(
+                                        vscode.extensions
+                                            .getExtension(
+                                                'maram-elaian.project-guardian'
+                                            )?.extensionPath || ''
+                                    ),
+                                    'media',
+                                    'icon.png'
+                                )
+                            )}"
+                        >
+
+                        <div>
+
+                            <div class="title">
+                                Project Guardian
+                            </div>
+
+                            <div class="subtitle">
+                                Architecture Protection
+                            </div>
+
+                        </div>
+
+                    </div>
+
+
+                    <div class="welcome">
+
+                        <h2>
+                            🛡️ Welcome
+                        </h2>
+
+                        <p>
+                            Analyze your project architecture
+                            and detect structural problems,
+                            dependency issues and organization risks.
+                        </p>
+
+                        <button
+                            onclick="analyze()"
+                        >
+                            🔍 Analyze Project
+                        </button>
+
+                    </div>
+
+
+                    <script>
+
+                        const vscode =
+                            acquireVsCodeApi();
+
+                        function analyze() {
+
+                            vscode.postMessage({
+                                command: 'analyze'
+                            });
+
+                        }
+
+                    </script>
+
+                </body>
+
+                </html>
+            `;
+        }
+
+
+        // ----------------------------------------------------
+        // ANALYSIS AVAILABLE
+        // ----------------------------------------------------
+
+        const score =
+            Math.round(health.score);
+
+        const statusLabel =
+            health.label || 'Healthy';
+
+
+        return `
+            <!DOCTYPE html>
+
+            <html>
+
+            <head>
+
+                <meta
+                    charset="UTF-8"
+                >
+
+                <meta
+                    name="viewport"
+                    content="width=device-width, initial-scale=1.0"
+                >
+
+                <style>
+
+                    * {
+                        box-sizing: border-box;
+                    }
+
+                    body {
+                        margin: 0;
+                        padding: 14px;
+                        background: #111111;
+                        color: #eeeeee;
+                        font-family:
+                            -apple-system,
+                            BlinkMacSystemFont,
+                            "Segoe UI",
+                            sans-serif;
+                    }
+
+                    .header {
+                        display: flex;
+                        align-items: center;
+                        gap: 10px;
+                        margin-bottom: 18px;
+                    }
+
+                    .logo {
+                        width: 34px;
+                        height: 34px;
+                        border-radius: 9px;
+                        object-fit: cover;
+                    }
+
+                    .title {
+                        font-size: 15px;
+                        font-weight: 700;
+                    }
+
+                    .subtitle {
+                        color: #777777;
+                        font-size: 10px;
+                        margin-top: 2px;
+                    }
+
+                    .score-card {
+                        background: #181818;
+                        border: 1px solid #292929;
+                        border-radius: 12px;
+                        padding: 18px;
+                        text-align: center;
+                        margin-bottom: 12px;
+                    }
+
+                    .score {
+                        font-size: 42px;
+                        font-weight: 800;
+                        color: #20c997;
+                    }
+
+                    .score-label {
+                        font-size: 12px;
+                        color: #aaaaaa;
+                        margin-top: 2px;
+                    }
+
+                    .summary {
+                        color: #888888;
+                        font-size: 11px;
+                        line-height: 1.5;
+                        margin-top: 10px;
+                    }
+
+                    .stats {
+                        display: grid;
+                        grid-template-columns: 1fr 1fr;
+                        gap: 8px;
+                        margin-bottom: 12px;
+                    }
+
+                    .stat {
+                        background: #181818;
+                        border: 1px solid #292929;
+                        border-radius: 10px;
+                        padding: 12px;
+                    }
+
+                    .stat-value {
+                        font-size: 20px;
+                        font-weight: 700;
+                    }
+
+                    .stat-label {
+                        font-size: 10px;
+                        color: #777777;
+                        margin-top: 3px;
+                    }
+
+                    .issues {
+                        background: #181818;
+                        border: 1px solid #292929;
+                        border-radius: 12px;
+                        padding: 14px;
+                    }
+
+                    .issues-title {
+                        font-size: 12px;
+                        font-weight: 700;
+                        margin-bottom: 12px;
+                    }
+
+                    .issue-row {
+                        display: flex;
+                        justify-content: space-between;
+                        align-items: center;
+                        padding: 8px 0;
+                        border-bottom: 1px solid #252525;
+                    }
+
+                    .issue-row:last-child {
+                        border-bottom: none;
+                    }
+
+                    .issue-name {
+                        font-size: 11px;
+                        color: #cccccc;
+                    }
+
+                    .issue-count {
+                        font-weight: 700;
+                        font-size: 12px;
+                    }
+
+                    .high {
+                        color: #ff6b6b;
+                    }
+
+                    .warning {
+                        color: #ffd166;
+                    }
+
+                    .info {
+                        color: #4dabf7;
+                    }
+
+                    button {
+                        width: 100%;
+                        margin-top: 12px;
+                        border: none;
+                        border-radius: 8px;
+                        padding: 10px;
+                        background: #20c997;
+                        color: #07110e;
+                        font-weight: 700;
+                        cursor: pointer;
+                    }
+
+                    button:hover {
+                        opacity: 0.9;
+                    }
+
+                </style>
+
+            </head>
+
+            <body>
+
+                <div class="header">
+
+                    <img
+                        class="logo"
+                        src="${webview.asWebviewUri(
+                            vscode.Uri.joinPath(
+                                vscode.Uri.file(
+                                    vscode.extensions
+                                        .getExtension(
+                                            'maram-elaian.project-guardian'
+                                        )?.extensionPath || ''
+                                ),
+                                'media',
+                                'icon.png'
+                            )
+                        )}"
+                    >
+
+                    <div>
+
+                        <div class="title">
+                            Project Guardian
+                        </div>
+
+                        <div class="subtitle">
+                            Architecture Protection
+                        </div>
+
+                    </div>
+
+                </div>
+
+
+                <div class="score-card">
+
+                    <div class="score">
+                        ${score}
+                    </div>
+
+                    <div class="score-label">
+                        ${escapeHtml(statusLabel)}
+                    </div>
+
+                    <div class="summary">
+                        ${escapeHtml(
+                            health.summary ||
+                            'Project architecture analyzed.'
+                        )}
+                    </div>
+
+                </div>
+
+
+                <div class="stats">
+
+                    <div class="stat">
+
+                        <div class="stat-value">
+                            ${metrics.fileCount}
+                        </div>
+
+                        <div class="stat-label">
+                            Files
+                        </div>
+
+                    </div>
+
+
+                    <div class="stat">
+
+                        <div class="stat-value">
+                            ${metrics.folderCount}
+                        </div>
+
+                        <div class="stat-label">
+                            Folders
+                        </div>
+
+                    </div>
+
+
+                    <div class="stat">
+
+                        <div class="stat-value">
+                            ${metrics.codeFileCount}
+                        </div>
+
+                        <div class="stat-label">
+                            Code Files
+                        </div>
+
+                    </div>
+
+
+                    <div class="stat">
+
+                        <div class="stat-value">
+                            ${metrics.importCount}
+                        </div>
+
+                        <div class="stat-label">
+                            Imports
+                        </div>
+
+                    </div>
+
+                </div>
+
+
+                <div class="issues">
+
+                    <div class="issues-title">
+                        Architecture Issues
+                    </div>
+
+
+                    <div class="issue-row">
+
+                        <span class="issue-name">
+                            High
+                        </span>
+
+                        <span class="issue-count high">
+                            ${metrics.highIssueCount}
+                        </span>
+
+                    </div>
+
+
+                    <div class="issue-row">
+
+                        <span class="issue-name">
+                            Warning
+                        </span>
+
+                        <span class="issue-count warning">
+                            ${metrics.warningIssueCount}
+                        </span>
+
+                    </div>
+
+
+                    <div class="issue-row">
+
+                        <span class="issue-name">
+                            Info
+                        </span>
+
+                        <span class="issue-count info">
+                            ${metrics.infoIssueCount}
+                        </span>
+
+                    </div>
+
+                </div>
+
+
+                <button
+                    onclick="analyze()"
+                >
+                    🔍 Analyze Again
+                </button>
+
+
+                <script>
+
+                    const vscode =
+                        acquireVsCodeApi();
+
+                    function analyze() {
+
+                        vscode.postMessage({
+                            command: 'analyze'
+                        });
+
+                    }
+
+                </script>
+
+            </body>
+
+            </html>
+        `;
+    }
+}
+
+
+// ============================================================
+// FULL DASHBOARD
+// ============================================================
+
+function showDashboard(
+    context: vscode.ExtensionContext,
+    rootPath: string,
+    analysis: any,
+    issues: any[],
+    metrics: any,
+    health: any
+) {
+
+    const panel =
+        vscode.window.createWebviewPanel(
+            'projectGuardianDashboard',
+            'Project Guardian',
+            vscode.ViewColumn.One,
+            {
+                enableScripts: true
+            }
+        );
+
+
+    panel.webview.onDidReceiveMessage(
+        async message => {
+
+            if (
+                message.command === 'openFile' &&
+                message.filePath
+            ) {
+
+                try {
+
+                    const document =
+                        await vscode.workspace.openTextDocument(
+                            vscode.Uri.file(
+                                message.filePath
+                            )
+                        );
+
+                    await vscode.window.showTextDocument(
+                        document
+                    );
+
+                } catch (error) {
+
+                    vscode.window.showErrorMessage(
+                        'Unable to open file.'
+                    );
+                }
+            }
+        }
+    );
+
+
+    panel.webview.html =
+        getDashboardHtml(
+            rootPath,
+            analysis,
+            issues,
+            metrics,
+            health
+        );
+}
+
+
+// ============================================================
+// FULL DASHBOARD HTML
+// ============================================================
 
 function getDashboardHtml(
+    rootPath: string,
     analysis: any,
     issues: any[],
     metrics: any,
     health: any
 ): string {
 
-    const projectName =
-        String(analysis.rootPath || '')
-            .split(/[\\/]/)
-            .filter(Boolean)
-            .pop() || 'this project';
+    const issueCards = issues
+        .map(issue => {
 
-    const issueRows =
-        issues.length === 0
+            const severity =
+                issue.severity || 'info';
 
-            ? `
-                <div class="empty-state">
-                    ${iconCheck()}
-                    <h3>No architecture issues found</h3>
-                    <p>${escapeHtml(projectName)} scanned clean.</p>
-                </div>
-            `
+            const affectedFiles =
+                issue.affectedFiles || [];
 
-            : issues
-                .map((issue) => {
 
-                    const severity = SEVERITY_META[issue.severity] || {
-                        label: issue.severity,
-                        order: 3
-                    };
+            const filesHtml =
+                affectedFiles
+                    .map((file: string) => {
 
-                    const affectedFiles =
-                        issue.affectedFiles
-                            .map(
-                                (file: string) => `
-                                    <button class="file-row" data-file="${escapeHtml(file)}">
-                                        ${iconFile()}
-                                        <span class="file-path">${escapeHtml(
-                                            getRelativePath(analysis.rootPath, file)
-                                        )}</span>
-                                        <span class="icon-arrow">${iconArrow()}</span>
-                                    </button>
-                                `
-                            )
-                            .join('');
+                        const absolutePath =
+                            vscode.Uri.file(
+                                file
+                            ).fsPath;
 
-                    return `
-                        <article class="issue-card ${escapeHtml(issue.severity)}">
+                        return `
+                            <button
+                                class="file-button"
+                                onclick="openFile(${JSON.stringify(
+                                    absolutePath
+                                )})"
+                            >
+                                📄 ${escapeHtml(
+                                    getRelativePath(
+                                        rootPath,
+                                        file
+                                    )
+                                )}
+                            </button>
+                        `;
 
-                            <div class="issue-card-head">
-                                <span class="severity-dot ${escapeHtml(issue.severity)}"></span>
-                                <div>
-                                    <div class="severity-label">${escapeHtml(severity.label)}</div>
-                                    <h3>${escapeHtml(issue.title)}</h3>
+                    })
+                    .join('');
+
+
+            return `
+                <div class="issue-card">
+
+                    <div class="issue-header">
+
+                        <span class="severity ${severity}">
+                            ${escapeHtml(
+                                severity.toUpperCase()
+                            )}
+                        </span>
+
+                        <h3>
+                            ${escapeHtml(
+                                issue.title ||
+                                issue.rule ||
+                                'Architecture Issue'
+                            )}
+                        </h3>
+
+                    </div>
+
+                    <p>
+                        ${escapeHtml(
+                            issue.message ||
+                            issue.description ||
+                            ''
+                        )}
+                    </p>
+
+                    ${
+                        filesHtml
+                            ? `
+                                <div class="affected">
+                                    <strong>
+                                        Affected Files
+                                    </strong>
+
+                                    ${filesHtml}
                                 </div>
-                            </div>
-
-                            <p class="issue-message">${escapeHtml(issue.message)}</p>
-
-                            <div class="affected-title">Affected files</div>
-                            <div class="file-list">
-                                ${affectedFiles}
-                            </div>
-
-                        </article>
-                    `;
-                })
-                .join('');
-
-    const scoreClass =
-        health.score >= 80 ? 'healthy' :
-        health.score >= 60 ? 'attention' : 'critical';
-
-    // Radial gauge geometry
-    const radius = 90;
-    const circumference = 2 * Math.PI * radius;
-    const clampedScore = Math.max(0, Math.min(100, health.score));
-    const offset = circumference * (1 - clampedScore / 100);
-
-    return `<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Project Guardian</title>
-<style>
-
-    * { box-sizing: border-box; }
-
-    body {
-        margin: 0;
-        padding: 0;
-        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-        color: var(--vscode-foreground);
-        background: var(--vscode-editor-background);
-    }
-
-    .mono {
-        font-family: var(--vscode-editor-font-family, "Cascadia Code", "Consolas", monospace);
-    }
-
-    .container {
-        max-width: 1040px;
-        margin: 0 auto;
-        padding: 40px 32px 64px;
-    }
-
-    /* Header */
-
-    .header {
-        display: flex;
-        align-items: center;
-        gap: 14px;
-        margin-bottom: 36px;
-    }
-
-    .mark {
-        flex-shrink: 0;
-        width: 40px;
-        height: 40px;
-        color: var(--pg-accent, #4ade80);
-    }
-
-    .brand h1 {
-        margin: 0;
-        font-size: 22px;
-        font-weight: 650;
-        letter-spacing: -0.01em;
-    }
-
-    .brand p {
-        margin: 3px 0 0;
-        opacity: 0.62;
-        font-size: 13px;
-    }
-
-    /* Hero */
-
-    .hero {
-        display: grid;
-        grid-template-columns: 220px 1fr;
-        gap: 28px;
-        align-items: stretch;
-        border: 1px solid var(--vscode-panel-border);
-        border-radius: 20px;
-        padding: 32px;
-        margin-bottom: 40px;
-    }
-
-    .gauge-wrap {
-        position: relative;
-        width: 180px;
-        height: 180px;
-        margin: 0 auto;
-    }
-
-    .gauge {
-        width: 100%;
-        height: 100%;
-        transform: rotate(-90deg);
-    }
-
-    .gauge-track {
-        fill: none;
-        stroke: var(--vscode-panel-border);
-        stroke-width: 12;
-    }
-
-    .gauge-value {
-        fill: none;
-        stroke-width: 12;
-        stroke-linecap: round;
-        stroke-dasharray: ${circumference.toFixed(2)}px;
-        stroke-dashoffset: ${circumference.toFixed(2)}px;
-        animation: gauge-fill 1s cubic-bezier(0.16, 0.84, 0.44, 1) 0.1s forwards;
-    }
-
-    .gauge-value.healthy { stroke: #4ade80; }
-    .gauge-value.attention { stroke: #facc15; }
-    .gauge-value.critical { stroke: #f87171; }
-
-    @keyframes gauge-fill {
-        to { stroke-dashoffset: ${offset.toFixed(2)}px; }
-    }
-
-    @media (prefers-reduced-motion: reduce) {
-        .gauge-value {
-            animation: none;
-            stroke-dashoffset: ${offset.toFixed(2)}px;
-        }
-    }
-
-    .gauge-readout {
-        position: absolute;
-        inset: 0;
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        justify-content: center;
-    }
-
-    .gauge-score {
-        font-size: 42px;
-        font-weight: 700;
-        line-height: 1;
-    }
-
-    .gauge-caption {
-        margin-top: 6px;
-        font-size: 12.5px;
-        opacity: 0.65;
-        text-align: center;
-        max-width: 140px;
-    }
-
-    .hero-body {
-        display: flex;
-        flex-direction: column;
-        justify-content: center;
-        min-width: 0;
-    }
-
-    .hero-body h2 {
-        margin: 0 0 10px;
-        font-size: 18px;
-    }
-
-    .hero-body > p {
-        margin: 0;
-        opacity: 0.75;
-        line-height: 1.65;
-        font-size: 14px;
-        max-width: 62ch;
-    }
-
-    .readout-strip {
-        display: flex;
-        margin-top: 24px;
-        padding-top: 20px;
-        border-top: 1px solid var(--vscode-panel-border);
-        gap: 0;
-    }
-
-    .readout-item {
-        flex: 1;
-        padding-right: 18px;
-        border-right: 1px solid var(--vscode-panel-border);
-    }
-
-    .readout-item:last-child {
-        border-right: none;
-        padding-right: 0;
-    }
-
-    .readout-item + .readout-item {
-        padding-left: 18px;
-    }
-
-    .readout-label {
-        font-size: 12px;
-        opacity: 0.6;
-    }
-
-    .readout-value {
-        font-size: 22px;
-        font-weight: 650;
-        margin-top: 4px;
-    }
-
-    /* Issues */
-
-    .section-title {
-        display: flex;
-        justify-content: space-between;
-        align-items: baseline;
-        margin-bottom: 16px;
-    }
-
-    .section-title h2 {
-        margin: 0;
-        font-size: 17px;
-    }
-
-    .issue-count {
-        font-size: 12.5px;
-        opacity: 0.55;
-    }
-
-    .issues {
-        display: flex;
-        flex-direction: column;
-        gap: 14px;
-    }
-
-    .issue-card {
-        padding: 22px 24px;
-        background: var(--vscode-editorWidget-background, var(--vscode-editor-background));
-        border: 1px solid var(--vscode-panel-border);
-        border-left-width: 3px;
-        border-radius: 16px;
-        transition: border-color 0.15s ease;
-    }
-
-    .issue-card.high { border-left-color: #f87171; }
-    .issue-card.warning { border-left-color: #facc15; }
-    .issue-card.info { border-left-color: #60a5fa; }
-
-    .issue-card-head {
-        display: flex;
-        gap: 12px;
-        align-items: flex-start;
-    }
-
-    .severity-dot {
-        margin-top: 6px;
-        width: 9px;
-        height: 9px;
-        border-radius: 50%;
-        flex-shrink: 0;
-    }
-
-    .severity-dot.high { background: #f87171; }
-    .severity-dot.warning { background: #facc15; }
-    .severity-dot.info { background: #60a5fa; }
-
-    .severity-label {
-        font-size: 12px;
-        opacity: 0.6;
-        margin-bottom: 2px;
-    }
-
-    .issue-card-head h3 {
-        margin: 0;
-        font-size: 15.5px;
-    }
-
-    .issue-message {
-        margin: 12px 0 18px 21px;
-        line-height: 1.6;
-        opacity: 0.75;
-        font-size: 13.5px;
-        max-width: 66ch;
-    }
-
-    .affected-title {
-        margin: 0 0 9px 21px;
-        font-size: 11.5px;
-        opacity: 0.5;
-    }
-
-    .file-list {
-        display: flex;
-        flex-direction: column;
-        gap: 6px;
-        margin-left: 21px;
-    }
-
-    .file-row {
-        width: 100%;
-        border: 1px solid transparent;
-        border-radius: 10px;
-        background: var(--vscode-textCodeBlock-background);
-        padding: 9px 12px;
-        display: flex;
-        align-items: center;
-        gap: 9px;
-        text-align: left;
-        cursor: pointer;
-        color: var(--vscode-foreground);
-    }
-
-    .file-row:hover {
-        background: var(--vscode-list-hoverBackground);
-        border-color: var(--vscode-panel-border);
-    }
-
-    .file-row:focus-visible {
-        outline: 1px solid var(--vscode-focusBorder);
-        outline-offset: 2px;
-    }
-
-    .file-row svg { flex-shrink: 0; opacity: 0.6; }
-    .file-row .icon-arrow { margin-left: auto; opacity: 0.4; }
-
-    .file-path {
-        font-family: var(--vscode-editor-font-family, "Cascadia Code", "Consolas", monospace);
-        font-size: 12.5px;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-    }
-
-    /* Empty state */
-
-    .empty-state {
-        text-align: center;
-        padding: 50px 20px;
-        border: 1px solid var(--vscode-panel-border);
-        border-radius: 14px;
-    }
-
-    .empty-state svg {
-        color: #4ade80;
-        margin-bottom: 14px;
-    }
-
-    .empty-state h3 { margin: 0 0 6px; font-size: 15px; }
-    .empty-state p { margin: 0; opacity: 0.6; font-size: 13.5px; }
-
-    /* Responsive */
-
-    @media (max-width: 720px) {
-        .hero {
-            grid-template-columns: 1fr;
-        }
-        .readout-strip {
-            flex-wrap: wrap;
-            row-gap: 16px;
-        }
-        .readout-item {
-            flex: 1 1 45%;
-            border-right: none !important;
-            padding: 0 !important;
-        }
-    }
-
-    @media (max-width: 480px) {
-        .container { padding: 24px 18px 48px; }
-    }
-
-</style>
-</head>
-<body>
-<div class="container">
-
-    <header class="header">
-        ${iconMark()}
-        <div class="brand">
-            <h1>Project Guardian</h1>
-            <p>Scan results for ${escapeHtml(projectName)}</p>
-        </div>
-    </header>
-
-    <section class="hero">
-
-        <div class="gauge-wrap">
-            <svg class="gauge" viewBox="0 0 200 200">
-                <circle class="gauge-track" cx="100" cy="100" r="${radius}"></circle>
-                <circle class="gauge-value ${scoreClass}" cx="100" cy="100" r="${radius}"></circle>
-            </svg>
-            <div class="gauge-readout">
-                <div class="gauge-score mono">${health.score}</div>
-                <div class="gauge-caption">${escapeHtml(health.label)}</div>
+                            `
+                            : ''
+                    }
+
+                </div>
+            `;
+
+        })
+        .join('');
+
+
+    return `
+        <!DOCTYPE html>
+
+        <html>
+
+        <head>
+
+            <meta charset="UTF-8">
+
+            <meta
+                name="viewport"
+                content="width=device-width, initial-scale=1.0"
+            >
+
+            <style>
+
+                * {
+                    box-sizing: border-box;
+                }
+
+                body {
+                    margin: 0;
+                    padding: 40px;
+                    background: #0d0d0d;
+                    color: #eeeeee;
+                    font-family:
+                        -apple-system,
+                        BlinkMacSystemFont,
+                        "Segoe UI",
+                        sans-serif;
+                }
+
+                .container {
+                    max-width: 1200px;
+                    margin: auto;
+                }
+
+                .header {
+                    display: flex;
+                    align-items: center;
+                    gap: 16px;
+                    margin-bottom: 35px;
+                }
+
+                .shield {
+                    width: 55px;
+                    height: 55px;
+                    background: #20c997;
+                    color: #07110e;
+                    border-radius: 14px;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    font-size: 27px;
+                    font-weight: 800;
+                }
+
+                h1 {
+                    margin: 0;
+                    font-size: 28px;
+                }
+
+                .subtitle {
+                    color: #777777;
+                    margin-top: 5px;
+                }
+
+                .overview {
+                    display: grid;
+                    grid-template-columns:
+                        repeat(
+                            4,
+                            1fr
+                        );
+                    gap: 15px;
+                    margin-bottom: 30px;
+                }
+
+                .metric {
+                    background: #171717;
+                    border: 1px solid #292929;
+                    border-radius: 14px;
+                    padding: 22px;
+                }
+
+                .metric-value {
+                    font-size: 30px;
+                    font-weight: 800;
+                }
+
+                .metric-label {
+                    color: #777777;
+                    margin-top: 5px;
+                    font-size: 13px;
+                }
+
+                .health {
+                    display: flex;
+                    align-items: center;
+                    gap: 35px;
+                    background: #171717;
+                    border: 1px solid #292929;
+                    border-radius: 16px;
+                    padding: 30px;
+                    margin-bottom: 30px;
+                }
+
+                .score-circle {
+                    width: 150px;
+                    height: 150px;
+                    border-radius: 50%;
+                    border: 10px solid #20c997;
+                    display: flex;
+                    flex-direction: column;
+                    align-items: center;
+                    justify-content: center;
+                    flex-shrink: 0;
+                }
+
+                .score-number {
+                    font-size: 42px;
+                    font-weight: 800;
+                }
+
+                .score-text {
+                    color: #777777;
+                    font-size: 12px;
+                }
+
+                .health h2 {
+                    margin-top: 0;
+                }
+
+                .health p {
+                    color: #999999;
+                    line-height: 1.6;
+                }
+
+                .issues-title {
+                    margin-bottom: 18px;
+                }
+
+                .issue-card {
+                    background: #171717;
+                    border: 1px solid #292929;
+                    border-radius: 14px;
+                    padding: 22px;
+                    margin-bottom: 14px;
+                }
+
+                .issue-header {
+                    display: flex;
+                    align-items: center;
+                    gap: 12px;
+                }
+
+                .issue-header h3 {
+                    margin: 0;
+                    font-size: 17px;
+                }
+
+                .severity {
+                    font-size: 10px;
+                    font-weight: 800;
+                    padding: 5px 8px;
+                    border-radius: 5px;
+                    background: #252525;
+                }
+
+                .severity.high {
+                    color: #ff6b6b;
+                }
+
+                .severity.warning {
+                    color: #ffd166;
+                }
+
+                .severity.info {
+                    color: #4dabf7;
+                }
+
+                .issue-card p {
+                    color: #999999;
+                    line-height: 1.6;
+                }
+
+                .affected {
+                    margin-top: 15px;
+                }
+
+                .affected strong {
+                    display: block;
+                    margin-bottom: 8px;
+                    font-size: 12px;
+                    color: #bbbbbb;
+                }
+
+                .file-button {
+                    background: #222222;
+                    border: 1px solid #333333;
+                    color: #bbbbbb;
+                    padding: 8px 10px;
+                    border-radius: 6px;
+                    margin: 3px;
+                    cursor: pointer;
+                }
+
+                .file-button:hover {
+                    border-color: #20c997;
+                    color: #20c997;
+                }
+
+                @media (
+                    max-width: 800px
+                ) {
+
+                    .overview {
+                        grid-template-columns:
+                            repeat(
+                                2,
+                                1fr
+                            );
+                    }
+
+                    .health {
+                        flex-direction: column;
+                        text-align: center;
+                    }
+
+                }
+
+            </style>
+
+        </head>
+
+
+        <body>
+
+            <div class="container">
+
+                <div class="header">
+
+                    <div class="shield">
+                        🛡
+                    </div>
+
+                    <div>
+
+                        <h1>
+                            Project Guardian
+                        </h1>
+
+                        <div class="subtitle">
+                            Intelligent Architecture Protection
+                        </div>
+
+                    </div>
+
+                </div>
+
+
+                <div class="health">
+
+                    <div class="score-circle">
+
+                        <div class="score-number">
+                            ${Math.round(
+                                health.score
+                            )}
+                        </div>
+
+                        <div class="score-text">
+                            HEALTH
+                        </div>
+
+                    </div>
+
+
+                    <div>
+
+                        <h2>
+                            ${escapeHtml(
+                                health.label ||
+                                'Project Health'
+                            )}
+                        </h2>
+
+                        <p>
+                            ${escapeHtml(
+                                health.summary ||
+                                'Your project has been analyzed.'
+                            )}
+                        </p>
+
+                    </div>
+
+                </div>
+
+
+                <div class="overview">
+
+                    <div class="metric">
+
+                        <div class="metric-value">
+                            ${metrics.fileCount}
+                        </div>
+
+                        <div class="metric-label">
+                            Total Files
+                        </div>
+
+                    </div>
+
+
+                    <div class="metric">
+
+                        <div class="metric-value">
+                            ${metrics.codeFileCount}
+                        </div>
+
+                        <div class="metric-label">
+                            Code Files
+                        </div>
+
+                    </div>
+
+
+                    <div class="metric">
+
+                        <div class="metric-value">
+                            ${metrics.folderCount}
+                        </div>
+
+                        <div class="metric-label">
+                            Folders
+                        </div>
+
+                    </div>
+
+
+                    <div class="metric">
+
+                        <div class="metric-value">
+                            ${metrics.importCount}
+                        </div>
+
+                        <div class="metric-label">
+                            Imports
+                        </div>
+
+                    </div>
+
+                </div>
+
+
+                <h2 class="issues-title">
+                    Architecture Issues
+                </h2>
+
+
+                ${
+                    issueCards ||
+                    `
+                        <div class="issue-card">
+                            <p>
+                                🎉 No architecture issues detected.
+                            </p>
+                        </div>
+                    `
+                }
+
             </div>
-        </div>
-
-        <div class="hero-body">
-            <h2>Overview</h2>
-            <p>${escapeHtml(health.summary)}</p>
-
-            <div class="readout-strip">
-                <div class="readout-item">
-                    <div class="readout-label">Files</div>
-                    <div class="readout-value mono">${metrics.fileCount}</div>
-                </div>
-                <div class="readout-item">
-                    <div class="readout-label">Code files</div>
-                    <div class="readout-value mono">${metrics.codeFileCount}</div>
-                </div>
-                <div class="readout-item">
-                    <div class="readout-label">Folders</div>
-                    <div class="readout-value mono">${metrics.folderCount}</div>
-                </div>
-                <div class="readout-item">
-                    <div class="readout-label">Imports</div>
-                    <div class="readout-value mono">${metrics.importCount}</div>
-                </div>
-            </div>
-        </div>
-
-    </section>
-
-    <section>
-        <div class="section-title">
-            <h2>Architecture issues</h2>
-            <span class="issue-count">${issues.length} issue${issues.length === 1 ? '' : 's'}</span>
-        </div>
-
-        <div class="issues">
-            ${issueRows}
-        </div>
-    </section>
-
-</div>
-
-<script>
-    const vscode = acquireVsCodeApi();
-
-    document.querySelectorAll('.file-row').forEach(button => {
-        button.addEventListener('click', () => {
-            const filePath = button.dataset.file;
-            if (!filePath) return;
-            vscode.postMessage({ command: 'openFile', filePath: filePath });
-        });
-    });
-</script>
-
-</body>
-</html>`;
-}
 
 
-// ============================================================
-// ICONS
-// ============================================================
+            <script>
 
-function iconMark(): string {
-    return `
-        <svg class="mark" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <path d="M20 3L34 8V19C34 27.5 28.2 33.9 20 37C11.8 33.9 6 27.5 6 19V8L20 3Z"
-                stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"/>
-            <path d="M11 19H16.5L19 13L22 25L24.5 19H29" stroke="currentColor"
-                stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
-        </svg>
-    `;
-}
+                const vscode =
+                    acquireVsCodeApi();
 
-function iconCheck(): string {
-    return `
-        <svg width="34" height="34" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="1.6" opacity="0.35"/>
-            <path d="M7.5 12.5L10.3 15.3L16.5 9" stroke="currentColor" stroke-width="1.8"
-                stroke-linecap="round" stroke-linejoin="round"/>
-        </svg>
-    `;
-}
 
-function iconFile(): string {
-    return `
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <path d="M6 2H14L19 7V22H6V2Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
-            <path d="M14 2V7H19" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
-        </svg>
-    `;
-}
+                function openFile(
+                    filePath
+                ) {
 
-function iconArrow(): string {
-    return `
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <path d="M7 17L17 7M17 7H9M17 7V15" stroke="currentColor" stroke-width="1.8"
-                stroke-linecap="round" stroke-linejoin="round"/>
-        </svg>
+                    vscode.postMessage({
+
+                        command:
+                            'openFile',
+
+                        filePath:
+                            filePath
+
+                    });
+
+                }
+
+            </script>
+
+        </body>
+
+        </html>
     `;
 }
 
@@ -696,8 +1397,11 @@ function iconArrow(): string {
 // HELPERS
 // ============================================================
 
-function escapeHtml(value: string): string {
-    return value
+function escapeHtml(
+    value: string
+): string {
+
+    return String(value)
         .replace(/&/g, '&amp;')
         .replace(/</g, '&lt;')
         .replace(/>/g, '&gt;')
@@ -705,11 +1409,14 @@ function escapeHtml(value: string): string {
         .replace(/'/g, '&#039;');
 }
 
-function getRelativePath(rootPath: string, filePath: string): string {
+
+function getRelativePath(
+    rootPath: string,
+    filePath: string
+): string {
+
     return filePath
         .replace(rootPath, '')
         .replace(/^[/\\]+/, '')
         .replace(/\\/g, '/');
 }
-
-export function deactivate() {}

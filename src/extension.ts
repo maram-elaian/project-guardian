@@ -358,7 +358,7 @@ class GuardianSidebarProvider
                             border: none;
                             border-radius: 8px;
                             padding: 10px;
-                            background: #20c997;
+                            background: #dba1a2;
                             color: #07110e;
                             font-weight: 700;
                             cursor: pointer;
@@ -521,7 +521,7 @@ class GuardianSidebarProvider
                     .score {
                         font-size: 42px;
                         font-weight: 800;
-                        color: #20c997;
+                        color: #dba1a2;
                     }
 
                     .score-label {
@@ -580,7 +580,7 @@ class GuardianSidebarProvider
                         justify-content: space-between;
                         align-items: center;
                         padding: 8px 0;
-                        border-bottom: 1px solid #252525;
+                        border-bottom: 1px solid #efd8d6;
                     }
 
                     .issue-row:last-child {
@@ -615,8 +615,8 @@ class GuardianSidebarProvider
                         border: none;
                         border-radius: 8px;
                         padding: 10px;
-                        background: #20c997;
-                        color: #07110e;
+                        background: #dba1a2;
+                        color: #422b23;
                         font-weight: 700;
                         cursor: pointer;
                     }
@@ -1021,7 +1021,7 @@ function getDashboardHtml(
                     width: 55px;
                     height: 55px;
                     background: #07110e;
-                    color:  #20c997;
+                    color:  #dba1a2;
                     border-radius: 14px;
                     display: flex;
                     align-items: center;
@@ -1052,7 +1052,7 @@ function getDashboardHtml(
                 }
 
                 .metric {
-                    background: #171717;
+                    background: #c2c6b9;
                     border: 1px solid #292929;
                     border-radius: 14px;
                     padding: 22px;
@@ -1073,7 +1073,7 @@ function getDashboardHtml(
                     display: flex;
                     align-items: center;
                     gap: 35px;
-                    background: #171717;
+                    background: #c2c6b9;
                     border: 1px solid #292929;
                     border-radius: 16px;
                     padding: 30px;
@@ -1084,7 +1084,7 @@ function getDashboardHtml(
                     width: 150px;
                     height: 150px;
                     border-radius: 50%;
-                    border: 10px solid #20c997;
+                    border: 10px solid #dba1a2;
                     display: flex;
                     flex-direction: column;
                     align-items: center;
@@ -1116,7 +1116,7 @@ function getDashboardHtml(
                 }
 
                 .issue-card {
-                    background: #171717;
+                    background: #c2c6b9;
                     border: 1px solid #292929;
                     border-radius: 14px;
                     padding: 22px;
@@ -1139,7 +1139,7 @@ function getDashboardHtml(
                     font-weight: 800;
                     padding: 5px 8px;
                     border-radius: 5px;
-                    background: #252525;
+                    background: #efd8d6;
                 }
 
                 .severity.high {
@@ -1171,7 +1171,7 @@ function getDashboardHtml(
                 }
 
                 .file-button {
-                    background: #222222;
+                    background: #422b23;
                     border: 1px solid #333333;
                     color: #bbbbbb;
                     padding: 8px 10px;
@@ -1181,8 +1181,8 @@ function getDashboardHtml(
                 }
 
                 .file-button:hover {
-                    border-color: #20c997;
-                    color: #20c997;
+                    border-color: #dba1a2;
+                    color: #dba1a2;
                 }
 
                 @media (

@@ -4,7 +4,6 @@
   "description": "Intelligent architecture protection and project organization for VS Code.",
   "version": "0.0.1",
   "publisher": "maram-elaian",
-  "icon": "src/media/icon.png",
   "engines": {
     "vscode": "^1.85.0"
   },
@@ -13,46 +12,47 @@
     "Visualization"
   ],
   "activationEvents": [
+    "onStartupFinished",
     "onCommand:project-guardian.analyzeProject",
     "onView:projectGuardian.sidebar"
-  ],
+],
   "main": "./out/extension.js",
   "contributes": {
-    "commands": [
-      {
-        "command": "project-guardian.analyzeProject",
-        "title": "Project Guardian: Analyze Project"
-      }
-    ],
-    "viewsContainers": {
-      "activitybar": [
-        {
-          "id": "projectGuardian",
-          "title": "Project Guardian",
-          "icon": "media/icon.svg"
-        }
-      ]
-    },
-    "views": {
-      "projectGuardian": [
-        {
-          "type": "webview",
-          "id": "projectGuardian.sidebar",
-          "name": "Guardian Dashboard"
-        }
-      ]
+  "commands": [
+    {
+      "command": "project-guardian.analyzeProject",
+      "title": "Project Guardian: Analyze Project"
     }
+  ],
+  "viewsContainers": {
+    "activitybar": [
+      {
+        "id": "projectGuardian",
+        "title": "Project Guardian",
+        "icon": "src/media/shield.svg"
+      }
+    ]
   },
+  "views": {
+    "projectGuardian": [
+      {
+        "type": "webview",
+        "id": "projectGuardian.sidebar",
+        "name": "Project Guardian"
+      }
+    ]
+  }
+},
   "scripts": {
     "vscode:prepublish": "npm run compile",
     "compile": "tsc -p ./",
     "watch": "tsc -watch -p ./"
   },
   "devDependencies": {
-    "@types/vscode": "^1.85.0",
+    "@types/mocha": "^10.0.10",
     "@types/node": "^20.0.0",
-    "typescript": "^5.3.0",
-    "@vscode/test-electron": "^2.3.8"
-  },
-  "dependencies": {}
+    "@types/vscode": "^1.85.0",
+    "@vscode/test-electron": "^2.3.8",
+    "typescript": "^5.3.0"
+  }
 }

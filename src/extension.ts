@@ -28,7 +28,7 @@ export function activate(context: vscode.ExtensionContext) {
     // SIDEBAR PROVIDER
     // --------------------------------------------------------
 
-    sidebarProvider = new GuardianSidebarProvider();
+    sidebarProvider = new GuardianSidebarProvider(context.extensionUri);
 
     context.subscriptions.push(
         vscode.window.registerWebviewViewProvider(
@@ -167,6 +167,8 @@ class GuardianSidebarProvider
 
     private view?: vscode.WebviewView;
 
+    constructor(private readonly extensionUri: vscode.Uri) { }
+
     public resolveWebviewView(
         webviewView: vscode.WebviewView
     ): void {
@@ -174,7 +176,8 @@ class GuardianSidebarProvider
         this.view = webviewView;
 
         webviewView.webview.options = {
-            enableScripts: true
+            enableScripts: true,
+            localResourceRoots: [this.extensionUri]
         };
 
         webviewView.webview.html =
@@ -250,13 +253,19 @@ class GuardianSidebarProvider
     // SIDEBAR HTML
     // --------------------------------------------------------
 
-    private getHtml(
-        webview: vscode.Webview
-    ): string {
-
+    private getHtml(webview: vscode.Webview): string {
         const metrics = lastMetrics;
         const health = lastHealth;
 
+        // 1. تم تعديل المسار ليشمل 'src' لأن مجلد media موجود بداخله
+        const logoUri = webview.asWebviewUri(
+            vscode.Uri.joinPath(this.extensionUri, 'src', 'media', 'icon.png')
+        );
+
+        // 2. إضافة سياسة الأمان (CSP) لضمان السماح بعرض الصور والسكريبتات
+        const csp = `default-src 'none'; style-src 'unsafe-inline'; img-src ${webview.cspSource} https: data:; script-src 'unsafe-inline';`;
+
+        // ----------------------------------------------------
 
         // ----------------------------------------------------
         // NO ANALYSIS YET
@@ -369,18 +378,7 @@ class GuardianSidebarProvider
 
                         <img
                             class="logo"
-                            src="${webview.asWebviewUri(
-                                vscode.Uri.joinPath(
-                                    vscode.Uri.file(
-                                        vscode.extensions
-                                            .getExtension(
-                                                'maram-elaian.project-guardian'
-                                            )?.extensionPath || ''
-                                    ),
-                                    'media',
-                                    'icon.png'
-                                )
-                            )}"
+                            src="${logoUri}"
                         >
 
                         <div>
@@ -637,18 +635,7 @@ class GuardianSidebarProvider
 
                     <img
                         class="logo"
-                        src="${webview.asWebviewUri(
-                            vscode.Uri.joinPath(
-                                vscode.Uri.file(
-                                    vscode.extensions
-                                        .getExtension(
-                                            'maram-elaian.project-guardian'
-                                        )?.extensionPath || ''
-                                ),
-                                'media',
-                                'icon.png'
-                            )
-                        )}"
+                        src="${logoUri}"
                     >
 
                     <div>
@@ -678,9 +665,9 @@ class GuardianSidebarProvider
 
                     <div class="summary">
                         ${escapeHtml(
-                            health.summary ||
-                            'Project architecture analyzed.'
-                        )}
+            health.summary ||
+            'Project architecture analyzed.'
+        )}
                     </div>
 
                 </div>
@@ -839,7 +826,8 @@ function showDashboard(
             'Project Guardian',
             vscode.ViewColumn.One,
             {
-                enableScripts: true
+                enableScripts: true,
+                localResourceRoots: [context.extensionUri]
             }
         );
 
@@ -921,16 +909,14 @@ function getDashboardHtml(
                         return `
                             <button
                                 class="file-button"
-                                onclick="openFile(${JSON.stringify(
-                                    absolutePath
-                                )})"
+                                data-file="${escapeHtml(absolutePath)}"
                             >
                                 📄 ${escapeHtml(
-                                    getRelativePath(
-                                        rootPath,
-                                        file
-                                    )
-                                )}
+                            getRelativePath(
+                                rootPath,
+                                file
+                            )
+                        )}
                             </button>
                         `;
 
@@ -945,31 +931,30 @@ function getDashboardHtml(
 
                         <span class="severity ${severity}">
                             ${escapeHtml(
-                                severity.toUpperCase()
-                            )}
+                severity.toUpperCase()
+            )}
                         </span>
 
                         <h3>
                             ${escapeHtml(
-                                issue.title ||
-                                issue.rule ||
-                                'Architecture Issue'
-                            )}
+                issue.title ||
+                issue.rule ||
+                'Architecture Issue'
+            )}
                         </h3>
 
                     </div>
 
                     <p>
                         ${escapeHtml(
-                            issue.message ||
-                            issue.description ||
-                            ''
-                        )}
+                issue.message ||
+                issue.description ||
+                ''
+            )}
                     </p>
 
-                    ${
-                        filesHtml
-                            ? `
+                    ${filesHtml
+                    ? `
                                 <div class="affected">
                                     <strong>
                                         Affected Files
@@ -978,8 +963,8 @@ function getDashboardHtml(
                                     ${filesHtml}
                                 </div>
                             `
-                            : ''
-                    }
+                    : ''
+                }
 
                 </div>
             `;
@@ -1035,8 +1020,8 @@ function getDashboardHtml(
                 .shield {
                     width: 55px;
                     height: 55px;
-                    background: #20c997;
-                    color: #07110e;
+                    background: #07110e;
+                    color:  #20c997;
                     border-radius: 14px;
                     display: flex;
                     align-items: center;
@@ -1255,8 +1240,8 @@ function getDashboardHtml(
 
                         <div class="score-number">
                             ${Math.round(
-                                health.score
-                            )}
+        health.score
+    )}
                         </div>
 
                         <div class="score-text">
@@ -1270,16 +1255,16 @@ function getDashboardHtml(
 
                         <h2>
                             ${escapeHtml(
-                                health.label ||
-                                'Project Health'
-                            )}
+        health.label ||
+        'Project Health'
+    )}
                         </h2>
 
                         <p>
                             ${escapeHtml(
-                                health.summary ||
-                                'Your project has been analyzed.'
-                            )}
+        health.summary ||
+        'Your project has been analyzed.'
+    )}
                         </p>
 
                     </div>
@@ -1348,16 +1333,15 @@ function getDashboardHtml(
                 </h2>
 
 
-                ${
-                    issueCards ||
-                    `
+                ${issueCards ||
+        `
                         <div class="issue-card">
                             <p>
                                 🎉 No architecture issues detected.
                             </p>
                         </div>
                     `
-                }
+        }
 
             </div>
 
@@ -1368,21 +1352,18 @@ function getDashboardHtml(
                     acquireVsCodeApi();
 
 
-                function openFile(
-                    filePath
-                ) {
+                document.querySelectorAll('.file-button').forEach(function (btn) {
 
-                    vscode.postMessage({
+                    btn.addEventListener('click', function () {
 
-                        command:
-                            'openFile',
-
-                        filePath:
-                            filePath
+                        vscode.postMessage({
+                            command: 'openFile',
+                            filePath: btn.getAttribute('data-file')
+                        });
 
                     });
 
-                }
+                });
 
             </script>
 

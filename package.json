@@ -4,6 +4,23 @@
   "description": "Intelligent architecture protection and project organization for VS Code.",
   "version": "0.0.1",
   "publisher": "maram-elaian",
+  "icon": "media/icon.png",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/maram-elaian/project-guardian.git"
+  },
+  "bugs": {
+    "url": "https://github.com/maram-elaian/project-guardian/issues"
+  },
+  "homepage": "https://github.com/maram-elaian/project-guardian#readme",
+  "keywords": [
+    "architecture",
+    "code quality",
+    "project structure",
+    "analysis",
+    "productivity"
+  ],
   "engines": {
     "vscode": "^1.85.0"
   },
@@ -15,34 +32,34 @@
     "onStartupFinished",
     "onCommand:project-guardian.analyzeProject",
     "onView:projectGuardian.sidebar"
-],
+  ],
   "main": "./out/extension.js",
   "contributes": {
-  "commands": [
-    {
-      "command": "project-guardian.analyzeProject",
-      "title": "Project Guardian: Analyze Project"
+    "commands": [
+      {
+        "command": "project-guardian.analyzeProject",
+        "title": "Project Guardian: Analyze Project"
+      }
+    ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "projectGuardian",
+          "title": "Project Guardian",
+          "icon": "media/shield.svg"
+        }
+      ]
+    },
+    "views": {
+      "projectGuardian": [
+        {
+          "type": "webview",
+          "id": "projectGuardian.sidebar",
+          "name": "Project Guardian"
+        }
+      ]
     }
-  ],
-  "viewsContainers": {
-    "activitybar": [
-      {
-        "id": "projectGuardian",
-        "title": "Project Guardian",
-        "icon": "src/media/shield.svg"
-      }
-    ]
   },
-  "views": {
-    "projectGuardian": [
-      {
-        "type": "webview",
-        "id": "projectGuardian.sidebar",
-        "name": "Project Guardian"
-      }
-    ]
-  }
-},
   "scripts": {
     "vscode:prepublish": "npm run compile",
     "compile": "tsc -p ./",

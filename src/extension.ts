@@ -163,17 +163,23 @@ export function activate(context: vscode.ExtensionContext) {
 
 
     context.subscriptions.push(analyzeCommand);
-    // إنشاء عنصر بشريط الحالة السفلي
-  const statusBarItem = vscode.window.createStatusBarItem(
-    vscode.StatusBarAlignment.Left,
-    100 // أولوية الترتيب، رقم أعلى = أقرب لليسار
-  );
-  statusBarItem.text = "$(shield) Guardian";
-  statusBarItem.tooltip = "افتح Project Guardian";
-  statusBarItem.command = "projectGuardian.sidebar.focus"; // أمر تلقائي بيولّده VS Code لأي webview view مسجّلة
-  statusBarItem.show();
 
-  context.subscriptions.push(statusBarItem);
+
+    // --------------------------------------------------------
+    // STATUS BAR ITEM
+    // --------------------------------------------------------
+
+    const statusBarItem = vscode.window.createStatusBarItem(
+        vscode.StatusBarAlignment.Left,
+        100
+    );
+
+    statusBarItem.text = "$(shield) Guardian";
+    statusBarItem.tooltip = "افتح Project Guardian";
+    statusBarItem.command = "projectGuardian.sidebar.focus";
+    statusBarItem.show();
+
+    context.subscriptions.push(statusBarItem);
 }
 
 
@@ -409,6 +415,8 @@ class GuardianSidebarProvider
         if (healthStatus === 'critical') {
             healthClass = 'critical';
         }
+
+        const healthColor = getHealthColor(healthScore);
 
 
         // ----------------------------------------------------
@@ -685,15 +693,46 @@ body {
 }
 
 
-.score {
+.score-ring {
 
-    font-size: 38px;
+    width: 76px;
+
+    height: 76px;
+
+    border-radius: 50%;
+
+    display: flex;
+
+    align-items: center;
+
+    justify-content: center;
+
+    flex-shrink: 0;
+
+    transition: background 0.3s ease;
+
+}
+
+
+.score-ring-inner {
+
+    width: 60px;
+
+    height: 60px;
+
+    border-radius: 50%;
+
+    background: #FFFFFF;
+
+    display: flex;
+
+    align-items: center;
+
+    justify-content: center;
+
+    font-size: 22px;
 
     font-weight: 800;
-
-    line-height: 1;
-
-    color: #8F3F4A;
 
 }
 
@@ -1013,12 +1052,34 @@ body {
 
     white-space: nowrap;
 
+    transition: background 0.15s ease, border-color 0.15s ease;
+
 }
 
 
-.file-button:hover {
+.issue-card:has(.issue-badge.high) .file-button:hover {
 
-    background: #F2E6E7;
+    background: #F6E0E2;
+
+    border-color: #8F3F4A;
+
+}
+
+
+.issue-card:has(.issue-badge.warning) .file-button:hover {
+
+    background: #F8EBDD;
+
+    border-color: #A86B2D;
+
+}
+
+
+.issue-card:has(.issue-badge.info) .file-button:hover {
+
+    background: #E9EFF0;
+
+    border-color: #586A6F;
 
 }
 
@@ -1175,8 +1236,16 @@ body {
 
     <div class="health-score-row">
 
-        <div class="score">
-            ${healthScore}
+        <div
+            class="score-ring"
+            style="background: conic-gradient(${healthColor} ${healthScore * 3.6}deg, #E7DEDB 0deg);"
+        >
+            <div
+                class="score-ring-inner"
+                style="color: ${healthColor};"
+            >
+                ${healthScore}
+            </div>
         </div>
 
         <div class="score-info">
@@ -1911,6 +1980,8 @@ function getDashboardHtml(
         healthClass = 'critical';
     }
 
+    const healthColor = getHealthColor(score);
+
 
     const issueList =
         Array.isArray(issues)
@@ -2046,7 +2117,7 @@ function getDashboardHtml(
 
                     return `
 
-<div class="dashboard-issue">
+<div class="dashboard-issue ${severityClass}">
 
     <div class="dashboard-issue-header">
 
@@ -2310,13 +2381,46 @@ body {
 }
 
 
-.score {
+.score-ring {
 
-    font-size: 54px;
+    width: 100px;
+
+    height: 100px;
+
+    border-radius: 50%;
+
+    display: flex;
+
+    align-items: center;
+
+    justify-content: center;
+
+    flex-shrink: 0;
+
+    transition: background 0.3s ease;
+
+}
+
+
+.score-ring-inner {
+
+    width: 80px;
+
+    height: 80px;
+
+    border-radius: 50%;
+
+    background: #FFFFFF;
+
+    display: flex;
+
+    align-items: center;
+
+    justify-content: center;
+
+    font-size: 30px;
 
     font-weight: 850;
-
-    color: #8F3F4A;
 
 }
 
@@ -2607,12 +2711,34 @@ body {
 
     font-size: 10px;
 
+    transition: background 0.15s ease, border-color 0.15s ease;
+
 }
 
 
-.dashboard-file:hover {
+.dashboard-issue.high .dashboard-file:hover {
 
-    background: #F2E6E7;
+    background: #F6E0E2;
+
+    border-color: #8F3F4A;
+
+}
+
+
+.dashboard-issue.warning .dashboard-file:hover {
+
+    background: #F8EBDD;
+
+    border-color: #A86B2D;
+
+}
+
+
+.dashboard-issue.info .dashboard-file:hover {
+
+    background: #E9EFF0;
+
+    border-color: #586A6F;
 
 }
 
@@ -2768,8 +2894,16 @@ body {
 
         <div class="health-main">
 
-            <div class="score">
-                ${score}
+            <div
+                class="score-ring"
+                style="background: conic-gradient(${healthColor} ${score * 3.6}deg, #E7DEDB 0deg);"
+            >
+                <div
+                    class="score-ring-inner"
+                    style="color: ${healthColor};"
+                >
+                    ${score}
+                </div>
             </div>
 
             <div>
@@ -2958,4 +3092,16 @@ function getRelativePath(
         .replace(/^[/\\]+/, '')
 
         .replace(/\\/g, '/');
+}
+
+
+function getHealthColor(score: number): string {
+
+    // 0 = أحمر, 60 = برتقالي/أصفر, 120 = أخضر
+
+    const clamped = Math.max(0, Math.min(100, score));
+
+    const hue = (clamped / 100) * 120;
+
+    return `hsl(${hue}, 65%, 45%)`;
 }
